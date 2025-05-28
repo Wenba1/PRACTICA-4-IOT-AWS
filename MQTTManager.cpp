@@ -3,7 +3,7 @@
 
 MQTTManager::MQTTManager(PubSubClient& client, ServoController* servo, RGBLed* led, UltrasonicSensor* ultrasonic, const char* topic,
                          bool& motion, unsigned long& motionTime, float& distance, int& level,
-                         bool& door, unsigned char& ledColor, bool& autoMode)
+                         bool& door, const char* ledColor, bool& autoMode)
   : mqttClient(client), servo(servo), rgbLed(led), ultrasonic(ultrasonic), updateTopic(topic),
     motionDetected(motion), lastMotionTime(motionTime), lastDistance(distance), lastLevel(level),
     doorOpen(door), color_led(ledColor), automatic_mode(autoMode) {}
@@ -15,10 +15,11 @@ void MQTTManager::setCallback() {
   });
 }
 
+
 void MQTTManager::reconnectMQTT(const char* clientId) {
   while (!mqttClient.connected()) {
     if (mqttClient.connect(clientId)) {
-      mqttClient.subscribe("$aws/things/trash_can/shadow/update/delta");
+      mqttClient.subscribe("$aws/things/smart_trash_can_sn0001/shadow/update/delta");
     } else {
       delay(2000);
     }
@@ -27,11 +28,12 @@ void MQTTManager::reconnectMQTT(const char* clientId) {
 
 void MQTTManager::publishState() {
   StaticJsonDocument<512> doc;
+
   doc["state"]["reported"]["motion_detected"] = motionDetected;
   doc["state"]["reported"]["lid_open"] = doorOpen;
   doc["state"]["reported"]["depth_cm"] = lastDistance;
   doc["state"]["reported"]["filling_state"] = ultrasonic->getFillingState(lastLevel);
-  doc["state"]["reported"]["led_color"] = (color_led == 'g' ? "green" : "red");
+  doc["state"]["reported"]["led_color"] = color_led;
   doc["state"]["reported"]["automatic_mode"] = automatic_mode;
 
   char buffer[512];
@@ -45,6 +47,7 @@ void MQTTManager::handleShadowUpdate(const char* payload) {
   if (error) return;
 
   JsonObject desired = doc["state"];
+
   if (desired.containsKey("lid_open")) {
     bool open = desired["lid_open"];
     if (open) {
@@ -57,20 +60,13 @@ void MQTTManager::handleShadowUpdate(const char* payload) {
   }
 
   if (desired.containsKey("led_color")) {
-    const char* color = desired["led_color"];
-    if (strcmp(color, "green") == 0) {
-      color_led = 'g';
-      rgbLed->setColor('g');
-    } else if (strcmp(color, "red") == 0) {
-      color_led = 'r';
-      rgbLed->setColor('r');
-    }
-  }
-
+  const char* color = desired["led_color"];
+  color_led = color; 
+  rgbLed->setColor(color);
+}
   if (desired.containsKey("automatic_mode")) {
     automatic_mode = desired["automatic_mode"];
-    // No se realiza ninguna acción en el ESP32; se reporta únicamente
   }
 
-  publishState(); // Reporta el nuevo estado
+  publishState();
 }

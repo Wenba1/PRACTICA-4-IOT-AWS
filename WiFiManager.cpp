@@ -21,4 +21,3 @@ void WiFiManager::configureCertificates(WiFiClientSecure& wiFiClient, const char
   wiFiClient.setPrivateKey(privateKey);
   Serial.println("Certificates configured for AWS IoT.");
 }
-

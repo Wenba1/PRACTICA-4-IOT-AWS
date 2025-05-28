@@ -1,5 +1,4 @@
 #include "RGBLed.h"
-#include <Arduino.h>
 
 RGBLed::RGBLed(int rPin, int gPin, int bPin)
   : redPin(rPin), greenPin(gPin), bluePin(bPin) {}
@@ -16,14 +15,8 @@ void RGBLed::setColor(int r, int g, int b) {
   analogWrite(bluePin, b);
 }
 
-void RGBLed::setColor(char color) {
-  if (color == 'r') setColor(255, 0, 0);       // rojo
-  else if (color == 'g') setColor(0, 255, 0);  // verde
-  else if (color == 'b') setColor(0, 0, 255);  // azul
-  else off();                                  // cualquier otro -> apagado
+void RGBLed::setColor(const char* color) {
+   if (strcmp(color, "red") == 0) setColor(255, 0, 0);
+  else if (strcmp(color, "green") == 0) setColor(0, 255, 0);
+  else if (strcmp(color, "blue") == 0) setColor(0, 0, 255);
 }
-
-void RGBLed::off() {
-  setColor(0, 0, 0);  // apaga todos los canales
-}
-

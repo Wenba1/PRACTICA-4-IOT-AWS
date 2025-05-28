@@ -9,10 +9,10 @@ private:
     bool lastState;
 
 public:
-    MotionSensor(int pin);  // Constructor
-    void begin();           // Inicializa el pin
-    bool detectMotionForDuration(unsigned long durationMs);    // Detecta flanco ascendente
-    bool detectMotionOverTime(unsigned long durationMs = 2000); // Lee durante 2s
+    MotionSensor(int pin);  
+    void begin();           
+    bool detectMotionForDuration(unsigned long durationMs );   
+    bool detectMotionOverTime(unsigned long durationMs = 3000); 
 };
 
 #endif
