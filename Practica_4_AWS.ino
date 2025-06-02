@@ -16,18 +16,12 @@ const int RGB_G_PIN = 23;
 const int RGB_B_PIN = 22;
 const int TRIGGER_PIN = 2;
 const int ECHO_PIN = 4;
-float LASTDISTANCE=15;
 
 WiFiClientSecure espClient;
 PubSubClient mqttClient(espClient);
 
-MotionSensor motionSensor(PIR_PIN);
-ServoController servo(SERVO_PIN);
-RGBLed rgbLed(RGB_R_PIN, RGB_G_PIN, RGB_B_PIN);
-UltrasonicSensor ultrasonic(TRIGGER_PIN, ECHO_PIN, LASTDISTANCE);
-
-const char* WIFI_SSID = "Galaxy A";
-const char* WIFI_PASSWORD = "qwertyui";
+const char* WIFI_SSID = "Familia Salinas";
+const char* WIFI_PASSWORD = "5278901cbba";
 const char* MQTT_BROKER = "ahxlba0g2uxk8-ats.iot.us-east-1.amazonaws.com";
 const int MQTT_PORT = 8883;
 const char* CLIENT_ID = "id_trash_can";
@@ -110,20 +104,34 @@ rqXRfboQnoZsG4q5WTP468SQvvG5
 )EOF";
 
 
+// Global variables
 bool motionDetected = false;
 unsigned long lastMotionTime = 0;
 float lastDistance = 0;
-int lastLevel = 0;
+int lastLevel = 0; //nonecessary
+bool depthChange = false;
 bool doorOpen = false;
-const char* color_led = "green";
-bool automatic_mode = true;
+String color_led = "green";
+bool automatic_mode = false;
+String filling_state = "empty";
+
+bool shouldOpenLid = false;
+bool shouldCloseLid = false;
+
+
+MotionSensor motionSensor(PIR_PIN);
+ServoController servo(SERVO_PIN);
+RGBLed rgbLed(RGB_R_PIN, RGB_G_PIN, RGB_B_PIN);
+UltrasonicSensor ultrasonic(TRIGGER_PIN, ECHO_PIN, lastDistance);
+
 
 // WiFi helper
 WiFiManager wifi(WIFI_SSID, WIFI_PASSWORD);
 
 // MQTT manager
 MQTTManager mqtt(mqttClient, &servo, &rgbLed, &ultrasonic, UPDATE_TOPIC,
-                 motionDetected, lastMotionTime, lastDistance, lastLevel, doorOpen, color_led, automatic_mode);
+                 motionDetected, lastMotionTime, lastDistance, lastLevel, doorOpen, color_led,
+                automatic_mode, filling_state,&shouldOpenLid, &shouldCloseLid);
 
 void setup() {
   Serial.begin(115200);
@@ -136,14 +144,19 @@ void setup() {
   mqtt.setCallback();
 
   motionSensor.begin();
-  servo.begin();
-  servo.close();
 
+  servo.begin();
+  Serial.println("testing servo manually...");
+  servo.open();
+  delay(2000);
+  servo.close();
+  //
   rgbLed.begin();
   ultrasonic.begin();
 
-  Serial.println("Sistema listo. Esperando comandos...");
+  Serial.println("Sistem ready. waiting for commands...");
 }
+
 
 void loop() {
   if (!mqttClient.connected()) {
@@ -152,35 +165,29 @@ void loop() {
   mqttClient.loop();
 
   float distance = ultrasonic.getDistance();
-  int level = ultrasonic.getLevel(distance);
-  bool publishRequired = false;
+    bool publishRequired = false;
 
-
-  if (automatic_mode) {
-    bool currentMotion = motionSensor.detectMotionOverTime(3000);
-    if (currentMotion && !motionDetected) {
-      motionDetected = true;
-      lastMotionTime = millis();
-      Serial.println("¡Movimiento detectado!");
-      publishRequired = true;
-    }
-
-    if (!currentMotion && motionDetected) {
-      motionDetected = false;
-      publishRequired = true;
-    }
-  }
-
-
-  if (level != lastLevel) {
-    lastLevel = level;
+  if (ultrasonic.depthSignificantChange(distance, 0.5)) {
     lastDistance = distance;
     publishRequired = true;
+  }
+
+  if (shouldOpenLid) {
+    Serial.println("Request to open lid from loop()");
+    servo.begin();
+    servo.open();
+    shouldOpenLid = false;
+  }
+
+  if (shouldCloseLid) {
+    Serial.println("Request to close lid from loop()");
+    servo.begin();
+    servo.close();
+    shouldCloseLid = false;
   }
 
   if (publishRequired) {
     mqtt.publishState();
   }
 
-  delay(100);
 }

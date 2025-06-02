@@ -15,11 +15,16 @@ def lambda_handler(event, context):
 
         raw_depth = event.get('depth_cm', 0)
         depth = round(raw_depth, 1)
-        depth = Decimal(str(depth)) if depth is not None else None
+        if depth <= 0 or depth > 15:
+            print(f"Invalid depth_cm value: {depth}. Skipping insert.")
+            return {'statusCode': 400, 'message': f'Invalid depth_cm value: {depth}'}
+
+        depth = Decimal(str(depth)) 
 
         motion_detected = event.get('motion_detected')
         lid_open = event.get('lid_open')
         filling_state = event.get('filling_state')
+        serial_numner = event.get('serial_number')
 
         last_item = get_last_item(thing_name)
         print("Last item:", last_item)
@@ -37,9 +42,9 @@ def lambda_handler(event, context):
                 'thing_name': thing_name,
                 'timestamp': timestamp,
                 'depth_cm': depth,
-                'motion_detected': motion_detected,
                 'lid_open': lid_open,
-                'filling_state': filling_state
+                'filling_state': filling_state,
+                'serial_number': serial_numner
             }
 
             print("Saving to DynamoDB:", item)

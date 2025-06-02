@@ -3,10 +3,10 @@
 
 MQTTManager::MQTTManager(PubSubClient& client, ServoController* servo, RGBLed* led, UltrasonicSensor* ultrasonic, const char* topic,
                          bool& motion, unsigned long& motionTime, float& distance, int& level,
-                         bool& door, const char* ledColor, bool& autoMode)
+                         bool& door, String& ledColor, bool& autoMode, String& fillingState, bool* openFlag, bool* closeFlag)
   : mqttClient(client), servo(servo), rgbLed(led), ultrasonic(ultrasonic), updateTopic(topic),
     motionDetected(motion), lastMotionTime(motionTime), lastDistance(distance), lastLevel(level),
-    doorOpen(door), color_led(ledColor), automatic_mode(autoMode) {}
+    doorOpen(door), color_led(ledColor), automatic_mode(autoMode), filling_state(fillingState), shouldOpenLid(openFlag), shouldCloseLid(closeFlag) {}
 
 void MQTTManager::setCallback() {
   mqttClient.setCallback([this](char* topic, byte* payload, unsigned int length) {
@@ -29,44 +29,71 @@ void MQTTManager::reconnectMQTT(const char* clientId) {
 void MQTTManager::publishState() {
   StaticJsonDocument<512> doc;
 
-  doc["state"]["reported"]["motion_detected"] = motionDetected;
   doc["state"]["reported"]["lid_open"] = doorOpen;
   doc["state"]["reported"]["depth_cm"] = lastDistance;
-  doc["state"]["reported"]["filling_state"] = ultrasonic->getFillingState(lastLevel);
-  doc["state"]["reported"]["led_color"] = color_led;
-  doc["state"]["reported"]["automatic_mode"] = automatic_mode;
+  doc["state"]["reported"]["filling_state"] = filling_state.c_str();
+  doc["state"]["reported"]["led_color"] = color_led.c_str();
 
   char buffer[512];
   serializeJson(doc, buffer);
+  Serial.println("Publishing status:");
+  Serial.println(buffer);
   mqttClient.publish(updateTopic, buffer);
 }
 
 void MQTTManager::handleShadowUpdate(const char* payload) {
   StaticJsonDocument<512> doc;
   DeserializationError error = deserializeJson(doc, payload);
-  if (error) return;
+
+  if (error) {
+    Serial.print("Error JSON: ");
+    Serial.println(error.c_str());
+    return;
+  }
 
   JsonObject desired = doc["state"];
 
+  bool stateChanged = false;
+
   if (desired.containsKey("lid_open")) {
+
     bool open = desired["lid_open"];
-    if (open) {
-      servo->open();
-      doorOpen = true;
-    } else {
-      servo->close();
-      doorOpen = false;
+    Serial.print("Actual value doorOpen: ");
+    Serial.println(doorOpen);
+    if (open != doorOpen) {
+      doorOpen = open;
+      Serial.println("lid state changed. action executed.");
+      if (open) {
+        Serial.println("Request to open lid.");
+        *shouldOpenLid = true;
+      } else {
+        Serial.println("Request to close lid.");
+        *shouldCloseLid = true;
+      }
+      stateChanged = true;
     }
   }
 
   if (desired.containsKey("led_color")) {
-  const char* color = desired["led_color"];
-  color_led = color; 
-  rgbLed->setColor(color);
-}
-  if (desired.containsKey("automatic_mode")) {
-    automatic_mode = desired["automatic_mode"];
+    const char* color = desired["led_color"];
+    if (color_led != String(color)) {
+      color_led = color;
+      Serial.println(color);
+      rgbLed->setColor(color);
+      stateChanged = true;
+    }
   }
 
-  publishState();
+  if (desired.containsKey("filling_state")) {
+    const char* newFillingState = desired["filling_state"];
+    if (filling_state != String(newFillingState)) {
+      filling_state = String(newFillingState);
+      Serial.println(filling_state);
+      stateChanged = true;
+    }
+  }
+
+  if (stateChanged) {
+    publishState();
+  }
 }

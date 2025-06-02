@@ -15,7 +15,7 @@ def lambda_handler(event, context):
         if depth_cm <= 5:
             filling_state = "full"
             led_color = "red"
-        elif depth_cm <= 15:
+        elif depth_cm <= 10:
             filling_state = "half_full"
             led_color = "blue"
         else:

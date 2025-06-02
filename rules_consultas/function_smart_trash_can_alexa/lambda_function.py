@@ -38,15 +38,6 @@ def update_shadow_state(desired_state):
     }
     iot_client.update_thing_shadow(thingName=THING_NAME, payload=json.dumps(payload))
 
-# class LaunchRequestHandler(AbstractRequestHandler):
-#     def can_handle(self, handler_input):
-#         return is_request_type("LaunchRequest")(handler_input)
-
-#     def handle(self, handler_input):
-#         speech = "Welcome to Smart Trash Can. You can ask me to open the lid, check the bin status, or enable automatic mode."
-#         reprompt = "What would you like to do?"
-#         return handler_input.response_builder.speak(speech).ask(reprompt).response
-
 class LaunchRequestHandler(AbstractRequestHandler):
     def can_handle(self, handler_input):
         return ask_utils.is_request_type("LaunchRequest")(handler_input)
@@ -61,54 +52,6 @@ class LaunchRequestHandler(AbstractRequestHandler):
                 .response
         )
 
-class EnableAutomaticModeIntentHandler(AbstractRequestHandler):
-    def can_handle(self, handler_input):
-        return is_intent_name("EnableAutomaticModeIntent")(handler_input)
-
-    def handle(self, handler_input):
-        thing_name = get_thing_name(handler_input)
-        if not thing_name:
-            speech = "I'm sorry, I couldn't find your assigned trash can."
-            return handler_input.response_builder.speak(speech).set_should_end_session(True).response
-
-        response = iot_client.update_thing_shadow(
-            thingName=thing_name,
-            payload=json.dumps({
-                "state": {
-                    "desired": {
-                        "automatic_mode": True
-                    }
-                }
-            })
-        )
-        speech = "Automatic mode is now enabled."
-        reprompt = "You can now ask to check status or disable automatic mode."
-        return handler_input.response_builder.speak(speech).ask(reprompt).response
-
-class DisableAutomaticModeIntentHandler(AbstractRequestHandler):
-    def can_handle(self, handler_input):
-        return is_intent_name("DisableAutomaticModeIntent")(handler_input)
-
-    def handle(self, handler_input):
-        thing_name = get_thing_name(handler_input)
-        if not thing_name:
-            speech = "I'm sorry, I couldn't find your assigned trash can."
-            return handler_input.response_builder.speak(speech).set_should_end_session(True).response
-
-        response = iot_client.update_thing_shadow(
-            thingName=thing_name,
-            payload=json.dumps({
-                "state": {
-                    "desired": {
-                        "automatic_mode": False
-                    }
-                }
-            })
-        )
-
-        speech = "Automatic mode is now disabled."
-        reprompt = "You can now ask to open the lid or get status."
-        return handler_input.response_builder.speak(speech).ask(reprompt).response
 
 class GetTrashCanStatusIntentHandler(AbstractRequestHandler):
     def can_handle(self, handler_input):
@@ -118,22 +61,24 @@ class GetTrashCanStatusIntentHandler(AbstractRequestHandler):
         thing_name = get_thing_name(handler_input)
         if not thing_name:
             speech = "Sorry, I couldn't identify your assigned trash can. Please make sure your device is registered."
-            return handler_input.response_builder.speak(speech).set_should_end_session(True).response
+            reprompt = "Can you try again or check your device registration?"
+            return handler_input.response_builder.speak(speech).ask(reprompt).response
 
         status = get_shadow_state(thing_name)
 
         if not status:
             speech = "I couldn't get the trash can's status at the moment. Please try again later."
-            return handler_input.response_builder.speak(speech).set_should_end_session(True).response
+            reprompt = "Would you like to try again or do something else?"
+            return handler_input.response_builder.speak(speech).ask(reprompt).response
 
         speech = (
             f"The trash can is currently {'open' if status.get('lid_open') else 'closed'}, "
-            f"in {'automatic' if status.get('automatic_mode') else 'manual'} mode, "
             f"with a depth of {status.get('depth_cm', 'unknown')} centimeters, "
             f"LED color is {status.get('led_color', 'unknown')}, and the bin is {status.get('filling_state', 'unknown')}."
         )
         reprompt = "Would you like to do something else with the trash can?"
         return handler_input.response_builder.speak(speech).ask(reprompt).response
+
 
 class OpenLidIntentHandler(AbstractRequestHandler):
     def can_handle(self, handler_input):
@@ -143,22 +88,37 @@ class OpenLidIntentHandler(AbstractRequestHandler):
         thing_name = get_thing_name(handler_input)
         if not thing_name:
             speech = "I'm sorry, I couldn't find your assigned trash can."
-            return handler_input.response_builder.speak(speech).set_should_end_session(True).response
+            reprompt = "Please check your device and try again."
+            return handler_input.response_builder.speak(speech).ask(reprompt).response
+        try:
+            response = iot_client.get_thing_shadow(thingName=thing_name)
+            shadow_payload = json.loads(response['payload'].read())
+            lid_open_state = shadow_payload.get("state", {}).get("reported", {}).get("lid_open", False)
+        except Exception as e:
+            speech = "I'm having trouble checking the current lid state."
+            reprompt = "Would you like to try again?"
+            return handler_input.response_builder.speak(speech).ask(reprompt).response
 
-        response = iot_client.update_thing_shadow(
+        if lid_open_state:
+            speech = "The lid is already open."
+            reprompt = "Would you like to do something else?"
+            return handler_input.response_builder.speak(speech).ask(reprompt).response
+
+        iot_client.update_thing_shadow(
             thingName=thing_name,
             payload=json.dumps({
                 "state": {
                     "desired": {
-                        "lid_open": True,
-                        "automatic_mode": False
+                        "lid_open": True     
                     }
                 }
             })
         )
-        speech = "Opening the trash can lid. Automatic mode has been turned off to avoid conflict."
+
+        speech = "Opening the trash can lid."
         reprompt = "Is there anything else you want to do?"
         return handler_input.response_builder.speak(speech).ask(reprompt).response
+
 
 class CloseLidIntentHandler(AbstractRequestHandler):
     def can_handle(self, handler_input):
@@ -168,22 +128,37 @@ class CloseLidIntentHandler(AbstractRequestHandler):
         thing_name = get_thing_name(handler_input)
         if not thing_name:
             speech = "I'm sorry, I couldn't find your assigned trash can."
-            return handler_input.response_builder.speak(speech).set_should_end_session(True).response
+            reprompt = "Please check your device and try again."
+            return handler_input.response_builder.speak(speech).ask(reprompt).response
+        try:
+            response = iot_client.get_thing_shadow(thingName=thing_name)
+            shadow_payload = json.loads(response['payload'].read())
+            lid_open_state = shadow_payload.get("state", {}).get("reported", {}).get("lid_open", True)
+        except Exception as e:
+            speech = "I'm having trouble checking the current lid state."
+            reprompt = "Would you like to try again?"
+            return handler_input.response_builder.speak(speech).ask(reprompt).response
 
-        response = iot_client.update_thing_shadow(
+        if not lid_open_state:
+            speech = "The lid is already closed."
+            reprompt = "Would you like to do anything else?"
+            return handler_input.response_builder.speak(speech).ask(reprompt).response
+
+        iot_client.update_thing_shadow(
             thingName=thing_name,
             payload=json.dumps({
                 "state": {
                     "desired": {
-                        "lid_open": False,
-                        "automatic_mode": False
+                        "lid_open": False     
                     }
                 }
             })
         )
-        speech = "Closing the trash can lid. Note: Automatic mode has been disabled to avoid conflict."
-        reprompt = "Would you like to enable automatic mode or check the status?"
+
+        speech = "Closing the trash can lid."
+        reprompt = "Is there anything else you want to do?"
         return handler_input.response_builder.speak(speech).ask(reprompt).response
+
 
 class CatchAllExceptionHandler(AbstractExceptionHandler):
     def can_handle(self, handler_input, exception):
@@ -196,8 +171,6 @@ class CatchAllExceptionHandler(AbstractExceptionHandler):
 
 sb = SkillBuilder()
 sb.add_request_handler(LaunchRequestHandler())
-sb.add_request_handler(EnableAutomaticModeIntentHandler())
-sb.add_request_handler(DisableAutomaticModeIntentHandler())
 sb.add_request_handler(GetTrashCanStatusIntentHandler())
 sb.add_request_handler(OpenLidIntentHandler())
 sb.add_request_handler(CloseLidIntentHandler())

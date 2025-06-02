@@ -1,8 +1,8 @@
 #include "UltrasonicSensor.h"
 #include <Arduino.h>
 
-UltrasonicSensor::UltrasonicSensor(int triggerPin, int echoPin, float lastDistance)
-    : trigPin(triggerPin), echoPin(echoPin) {}
+UltrasonicSensor::UltrasonicSensor(int triggerPin, int echoPin, float& lastDistance)
+    : trigPin(triggerPin), echoPin(echoPin), lastDistance(lastDistance) {}
 
 void UltrasonicSensor::begin() {
   pinMode(trigPin, OUTPUT);
@@ -21,6 +21,10 @@ float UltrasonicSensor::getDistance() {
 }
 
 bool UltrasonicSensor::depthSignificantChange(float newDistance, float threshold) {
+  if (newDistance <= 0 || newDistance >= 15) {
+    return false;
+  }
+
   if (lastDistance < 0) {
     lastDistance = newDistance; 
     return true;
@@ -32,16 +36,4 @@ bool UltrasonicSensor::depthSignificantChange(float newDistance, float threshold
   }
 
   return false;
-}
-
-int UltrasonicSensor::getLevel(float distance) {
-  if (distance <= 5) return 2;           
-  else if (distance <= 15) return 1;     
-  else return 0;                         
-}
-
-String UltrasonicSensor::getFillingState(int level) {
-  if (level == 2) return "full";
-  else if (level == 1) return "half_full";
-  else return "empty";
 }

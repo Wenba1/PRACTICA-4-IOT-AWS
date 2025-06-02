@@ -10,7 +10,7 @@ class MQTTManager {
   public:
     MQTTManager(PubSubClient& client, ServoController* servo, RGBLed* led, UltrasonicSensor* ultrasonic, const char* topic,
                 bool& motion, unsigned long& motionTime, float& distance, int& level,
-                bool& door, const char* ledColor, bool& autoMode);
+                bool& door, String& ledColor, bool& autoMode, String& fillingState, bool* openFlag, bool* closeFlag);
 
     void setCallback();
     void reconnectMQTT(const char* clientId);
@@ -28,8 +28,12 @@ class MQTTManager {
     float& lastDistance;
     int& lastLevel;
     bool& doorOpen;
-    const char* color_led;
+    String& color_led;
     bool& automatic_mode;
+    String& filling_state;
+
+    bool* shouldOpenLid;
+    bool* shouldCloseLid;
 
     void handleShadowUpdate(const char* payload);
 };
