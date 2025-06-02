@@ -1,7 +1,6 @@
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
 #include <PubSubClient.h>
-#include "MotionSensor.h"
 #include "ServoController.h"
 #include "WiFiManager.h"
 #include "MQTTManager.h"
@@ -9,7 +8,6 @@
 #include "UltrasonicSensor.h"
 
 
-const int PIR_PIN = 19;
 const int SERVO_PIN = 18;
 const int RGB_R_PIN = 21;
 const int RGB_G_PIN = 23;
@@ -167,7 +165,7 @@ void loop() {
   float distance = ultrasonic.getDistance();
     bool publishRequired = false;
 
-  if (ultrasonic.depthSignificantChange(distance, 0.5)) {
+  if (ultrasonic.depthSignificantChange(distance, 2.0)) {
     lastDistance = distance;
     publishRequired = true;
   }
